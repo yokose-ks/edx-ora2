@@ -15,15 +15,19 @@
   // --------------------
 
   // chrome: title
+  // --------------------
   .openassessment__title {
     @include row();
 
     .problem-header {
       text-transform: uppercase;
+      font-family: $f-title;
     }
   }
 
+
   // steps
+  // --------------------
   .openassessment__steps {
     @extend %no-list;
     counter-reset: item; // setting counter here
@@ -66,9 +70,10 @@
       }
     }
 
-    // step status
-    .step__status {
 
+    // step status
+    // --------------------
+    .step__status {
 
       .step__status__value {
         display: block;
@@ -145,10 +150,12 @@
     }
 
     .step__status__label {
-    @extend %text-sr;
+      @extend %text-sr;
     }
 
-    // step content wrapper
+
+    // step content
+    // --------------------
     .wrapper--step__content {
       margin-top: $baseline-v;
     }
@@ -177,7 +184,9 @@
       margin-bottom: $baseline-v;
     }
 
+
     // step actions
+    // --------------------
     .step__actions {
       @include transition(background-color $tmg-f1 ease-in-out 0s);
       border-radius: ($baseline-v/5);
