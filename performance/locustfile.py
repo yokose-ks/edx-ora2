@@ -8,6 +8,7 @@ import random
 from lxml import etree
 import loremipsum
 from locust import HttpLocust, TaskSet, task
+import gevent
 
 
 class OpenAssessmentPage(object):
@@ -54,17 +55,22 @@ class OpenAssessmentPage(object):
         self.client.get(self.BASE_URL, verify=False)
 
         # Load each of the steps
-        step_dict = {
-            'submission': 'render_submission',
-            'peer': 'render_peer_assessment',
-            'self': 'render_self_assessment',
-            'grade': 'render_grade',
-        }
+        get_unverified = lambda url: self.client.get(url, verify=False)
+        greenlets = [
+            gevent.spawn(get_unverified, url)
+            for url in [
+                self.handler_url(handler) for handler in [
+                    'render_submission', 'render_peer_assessment',
+                    'render_self_assessment', 'render_grade',
+                ]
+            ]
+        ]
+        gevent.joinall(greenlets)
 
-        self.step_resp_dict = {
-            name: self.client.get(self.handler_url(handler), verify=False)
-            for name, handler in step_dict.iteritems()
-        }
+        self.step_resp_dict = dict(zip(
+            ['submission', 'peer', 'self', 'grade'],
+            [g.value for g in greenlets]
+        ))
 
         return self
 
@@ -130,6 +136,16 @@ class OpenAssessmentPage(object):
             'options_selected': self.OPTIONS_SELECTED,
         })
         self.client.post(self.handler_url('self_assess'), data=payload, headers=self._post_headers, verify=False)
+
+    def has_grade(self):
+        """
+        Check whether the user has a grade.
+
+        Returns:
+            bool
+        """
+        resp = self.step_resp_dict.get('grade')
+        return resp is not None and resp.content is not None and "has--grade" in resp.content.lower()
 
     def handler_url(self, handler_name):
         """
@@ -211,6 +227,8 @@ class OpenAssessmentTasks(TaskSet):
 
         if self.page.can_self_assess():
             self.page.self_assess()
+
+        if self.page.has_grade():
             self.page.log_in()
 
 
@@ -219,5 +237,5 @@ class OpenAssessmentLocust(HttpLocust):
     Performance test definition for the OpenAssessment XBlock.
     """
     task_set = OpenAssessmentTasks
-    min_wait = 10000
-    max_wait = 15000
+    min_wait = 500
+    max_wait = 1000
