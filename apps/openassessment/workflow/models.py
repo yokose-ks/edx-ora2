@@ -52,12 +52,14 @@ class AssessmentWorkflow(TimeStampedModel, StatusModel):
         "self",  # User needs to assess themselves
     ]
 
-    STATUS_VALUES = STEPS + [
+    STATUSES = [
         "waiting",  # User has done all necessary assessment but hasn't been
                     # graded yet -- we're waiting for assessments of their
                     # submission by others.
         "done",  # Complete
     ]
+
+    STATUS_VALUES = STEPS + STATUSES
 
     STATUS = Choices(*STATUS_VALUES)  # implicit "status" field
 

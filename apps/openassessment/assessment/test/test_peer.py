@@ -134,6 +134,7 @@ TUESDAY = datetime.datetime(2007, 9, 13, 0, 0, 0, 0, pytz.UTC)
 WEDNESDAY = datetime.datetime(2007, 9, 15, 0, 0, 0, 0, pytz.UTC)
 THURSDAY = datetime.datetime(2007, 9, 16, 0, 0, 0, 0, pytz.UTC)
 
+STEPS = ['peer', 'self']
 
 @ddt
 class TestPeerApi(CacheResetTest):
@@ -1137,5 +1138,5 @@ class TestPeerApi(CacheResetTest):
         new_student_item["student_id"] = student
         submission = sub_api.create_submission(new_student_item, answer, date)
         peer_api.create_peer_workflow(submission["uuid"])
-        workflow_api.create_workflow(submission["uuid"])
+        workflow_api.create_workflow(submission["uuid"], STEPS)
         return submission, new_student_item

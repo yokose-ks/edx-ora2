@@ -2,7 +2,6 @@
 
 import datetime as dt
 import logging
-import dateutil
 import pkg_resources
 
 import pytz
@@ -239,7 +238,8 @@ class OpenAssessmentBlock(
 
         # Include release/due dates for each step in the problem
         context['step_dates'] = list()
-        for step in ['submission', 'peer-assessment', 'self-assessment']:
+        steps = ['submission'] + [assessment["name"] for assessment in self.rubric_assessments]
+        for step in steps:
 
             # Get the dates as a student would see them
             __, __, start_date, due_date = self.is_closed(step=step, course_staff=False)
