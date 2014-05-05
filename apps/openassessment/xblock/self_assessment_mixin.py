@@ -8,6 +8,7 @@ from openassessment.assessment import self_api
 from openassessment.workflow import api as workflow_api
 from submissions import api as submission_api
 from .resolve_dates import DISTANT_FUTURE
+from openassessment.xblock.defaults import ASSESSMENTS
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ class SelfAssessmentMixin(object):
 
     @XBlock.handler
     def render_self_assessment(self, data, suffix=''):
-        if "self-assessment" not in self.assessment_steps:
+        if ASSESSMENTS.self not in self.assessment_steps:
             return Response(u"")
 
         try:
@@ -52,7 +53,7 @@ class SelfAssessmentMixin(object):
         """
         context = {}
         path = 'openassessmentblock/self/oa_self_unavailable.html'
-        problem_closed, reason, start_date, due_date = self.is_closed(step="self-assessment")
+        problem_closed, reason, start_date, due_date = self.is_closed(step=ASSESSMENTS.self)
 
         # We display the due date whether the problem is open or closed.
         # If no date is set, it defaults to the distant future, in which

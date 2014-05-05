@@ -11,6 +11,7 @@ from openassessment.assessment.peer_api import (
 )
 import openassessment.workflow.api as workflow_api
 from .resolve_dates import DISTANT_FUTURE
+from openassessment.xblock.defaults import ASSESSMENTS
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ class PeerAssessmentMixin(object):
         if 'criterion_feedback' not in data:
             return {'success': False, 'msg': _('Must provide feedback for criteria in the assessment')}
 
-        assessment_ui_model = self.get_assessment_module('peer-assessment')
+        assessment_ui_model = self.get_assessment_module(ASSESSMENTS.peer)
         if assessment_ui_model:
             rubric_dict = {
                 'criteria': self.rubric_criteria
@@ -117,7 +118,7 @@ class PeerAssessmentMixin(object):
                 number of assessments.
 
         """
-        if "peer-assessment" not in self.assessment_steps:
+        if ASSESSMENTS.peer not in self.assessment_steps:
             return Response(u"")
         continue_grading = data.params.get('continue_grading', False)
         path, context_dict = self.peer_path_and_context(continue_grading)
@@ -136,7 +137,7 @@ class PeerAssessmentMixin(object):
         """
         path = 'openassessmentblock/peer/oa_peer_unavailable.html'
         finished = False
-        problem_closed, reason, start_date, due_date = self.is_closed(step="peer-assessment")
+        problem_closed, reason, start_date, due_date = self.is_closed(step=ASSESSMENTS.peer)
 
         context_dict = {
             "rubric_criteria": self.rubric_criteria,
@@ -158,7 +159,7 @@ class PeerAssessmentMixin(object):
         continue_grading = continue_grading and workflow["status_details"]["peer"]["complete"]
 
         student_item = self.get_student_item_dict()
-        assessment = self.get_assessment_module('peer-assessment')
+        assessment = self.get_assessment_module(ASSESSMENTS.peer)
         if assessment:
             context_dict["must_grade"] = assessment["must_grade"]
             finished, count = peer_api.has_finished_required_evaluating(

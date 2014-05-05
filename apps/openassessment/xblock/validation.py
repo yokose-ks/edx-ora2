@@ -5,6 +5,7 @@ from collections import Counter
 from django.utils.translation import ugettext as _
 from openassessment.assessment.serializers import rubric_from_dict, InvalidRubric
 from openassessment.xblock.resolve_dates import resolve_dates, DateValidationError, InvalidDateFormat
+from openassessment.xblock.defaults import ASSESSMENTS
 
 
 def _match_by_order(items, others):
@@ -67,13 +68,13 @@ def validate_assessments(assessments, current_assessments, is_released):
             and msg describes any validation errors found.
     """
     def _self_only(assessments):
-        return len(assessments) == 1 and assessments[0].get('name') == 'self-assessment'
+        return len(assessments) == 1 and assessments[0].get('name') == ASSESSMENTS.self
 
     def _peer_then_self(assessments):
         return (
             len(assessments) == 2 and
-            assessments[0].get('name') == 'peer-assessment' and
-            assessments[1].get('name') == 'self-assessment'
+            assessments[0].get('name') == ASSESSMENTS.peer and
+            assessments[1].get('name') == ASSESSMENTS.self
         )
 
     if len(assessments) == 0:
@@ -88,11 +89,11 @@ def validate_assessments(assessments, current_assessments, is_released):
 
     for assessment_dict in assessments:
         # Supported assessment
-        if not assessment_dict.get('name') in ['peer-assessment', 'self-assessment']:
+        if not assessment_dict.get('name') in ASSESSMENTS.values():
             return (False, _('The "name" value must be "peer-assessment" or "self-assessment".'))
 
         # Number you need to grade is >= the number of people that need to grade you
-        if assessment_dict.get('name') == 'peer-assessment':
+        if assessment_dict.get('name') == ASSESSMENTS.peer:
             must_grade = assessment_dict.get('must_grade')
             must_be_graded_by = assessment_dict.get('must_be_graded_by')
 

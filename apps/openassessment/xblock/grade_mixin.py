@@ -10,6 +10,7 @@ from xblock.core import XBlock
 from openassessment.assessment import peer_api
 from openassessment.assessment import self_api
 from submissions import api as sub_api
+from openassessment.xblock.defaults import ASSESSMENTS
 
 
 class GradeMixin(object):
@@ -74,7 +75,7 @@ class GradeMixin(object):
         assessment_steps = [asmnt['name'] for asmnt in self.rubric_assessments]
         submission_uuid = workflow['submission_uuid']
 
-        if "peer-assessment" in assessment_steps:
+        if ASSESSMENTS.peer in assessment_steps:
             feedback = peer_api.get_assessment_feedback(submission_uuid)
             peer_assessments = peer_api.get_assessments(submission_uuid)
             has_submitted_feedback = peer_api.get_assessment_feedback(submission_uuid) is not None
@@ -83,7 +84,7 @@ class GradeMixin(object):
             peer_assessments = []
             has_submitted_feedback = False
 
-        if "self-assessment" in assessment_steps:
+        if ASSESSMENTS.self in assessment_steps:
             self_assessment = self_api.get_assessment(submission_uuid)
         else:
             self_assessment = None
@@ -111,9 +112,9 @@ class GradeMixin(object):
         # Note that we are updating a *copy* of the rubric criteria stored in
         # the XBlock field
         max_scores = peer_api.get_rubric_max_scores(submission_uuid)
-        if "peer-assessment" in assessment_steps:
+        if ASSESSMENTS.peer in assessment_steps:
             median_scores = peer_api.get_assessment_median_scores(submission_uuid)
-        elif "self-assessment" in assessment_steps:
+        elif ASSESSMENTS.self in assessment_steps:
             median_scores = self_api.get_assessment_scores_by_criteria(submission_uuid)
 
         if median_scores is not None and max_scores is not None:

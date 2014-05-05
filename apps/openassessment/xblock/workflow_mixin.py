@@ -1,5 +1,6 @@
 from xblock.core import XBlock
 from openassessment.workflow import api as workflow_api
+from openassessment.xblock.defaults import ASSESSMENTS
 
 
 class WorkflowMixin(object):
@@ -35,7 +36,7 @@ class WorkflowMixin(object):
         Returns:
             dict
         """
-        assessment_ui_model = self.get_assessment_module('peer-assessment')
+        assessment_ui_model = self.get_assessment_module(ASSESSMENTS.peer)
 
         if not assessment_ui_model:
             return {}

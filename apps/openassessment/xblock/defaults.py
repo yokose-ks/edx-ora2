@@ -64,12 +64,24 @@ DEFAULT_RUBRIC_FEEDBACK_PROMPT = """
     (Optional) What aspects of this response stood out to you? What did it do well? How could it improve?
 """
 
+class DictEnum(dict):
+    def __getattr__(self, name):
+        if name in self.keys():
+            return self.get(name)
+        raise AttributeError
+
+ASSESSMENTS = DictEnum(
+    {
+        'peer': 'peer-assessment',
+        'self': 'self-assessment'
+    }
+)
 
 # The Default Peer Assessment is created as an example of how this XBlock can be
 # configured. If no configuration is specified, this is the default assessment
 # module(s) associated with the XBlock.
 DEFAULT_PEER_ASSESSMENT = {
-    "name": "peer-assessment",
+    "name": ASSESSMENTS.peer,
     "start": None,
     "due": None,
     "must_grade": 5,
@@ -77,7 +89,7 @@ DEFAULT_PEER_ASSESSMENT = {
 }
 
 DEFAULT_SELF_ASSESSMENT = {
-    "name": "self-assessment",
+    "name": ASSESSMENTS.self,
     "due": None,
 }
 

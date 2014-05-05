@@ -30,7 +30,6 @@ from openassessment.xblock.resolve_dates import resolve_dates, DISTANT_PAST, DIS
 
 logger = logging.getLogger(__name__)
 
-
 UI_MODELS = {
     "submission": {
         "name": "submission",
@@ -38,14 +37,14 @@ UI_MODELS = {
         "navigation_text": "Your response to this problem",
         "title": "Your Response"
     },
-    "peer-assessment": {
-        "name": "peer-assessment",
+    ASSESSMENTS.peer: {
+        "name": ASSESSMENTS.peer,
         "class_id": "openassessment__peer-assessment",
         "navigation_text": "Your assessment(s) of peer responses",
         "title": "Assess Peers' Responses"
     },
-    "self-assessment": {
-        "name": "self-assessment",
+    ASSESSMENTS.self: {
+        "name": ASSESSMENTS.self, # TODO do we need this name?
         "class_id": "openassessment__self-assessment",
         "navigation_text": "Your assessment of your response",
         "title": "Assess Your Response"
@@ -440,7 +439,7 @@ class OpenAssessmentBlock(
         # We hard-code this to the submission -> peer -> self workflow for now;
         # later, we can revisit to make this more flexible.
         open_range = (start, due)
-        if step in ["submission", "peer-assessment", "self-assessment"]:
+        if step in ["submission", ASSESSMENTS.peer, ASSESSMENTS.self]:
             open_range = step_ranges[step]
 
         # Course staff always have access to the problem
