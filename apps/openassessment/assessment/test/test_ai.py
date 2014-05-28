@@ -2,13 +2,16 @@
 """
 Tests for AI assessment.
 """
+import time
 import copy
 import mock
 from django.db import DatabaseError
 from django.test.utils import override_settings
+from contextlib import contextmanager
 from openassessment.test_utils import CacheResetTest
 from submissions import api as sub_api
 from openassessment.assessment.api import ai as ai_api
+
 from openassessment.assessment.models import (
     AITrainingWorkflow, AIGradingWorkflow, AIClassifierSet, Assessment
 )
@@ -18,6 +21,13 @@ from openassessment.assessment.errors import (
     AITrainingRequestError, AITrainingInternalError,
     AIGradingRequestError, AIGradingInternalError
 )
+
+from openassessment.assessment.models import AITrainingWorkflow, AIGradingWorkflow, AIClassifierSet
+from openassessment.assessment.worker.algorithm import AIAlgorithm, AIAlgorithmError
+from openassessment.assessment.worker import reschedule as reschedule_tasks
+from openassessment.assessment.serializers import rubric_from_dict
+from openassessment.assessment.errors import (AITrainingRequestError, AITrainingInternalError,
+                                              AIGradingInternalError, AIError)
 from openassessment.assessment.test.constants import RUBRIC, EXAMPLES, STUDENT_ITEM, ANSWER
 
 
@@ -56,6 +66,8 @@ class StubAIAlgorithm(AIAlgorithm):
 
 
 ALGORITHM_ID = "test-stub"
+COURSE_ID = STUDENT_ITEM.get('course_id')
+ITEM_ID = STUDENT_ITEM.get('item_id')
 
 AI_ALGORITHMS = {
     ALGORITHM_ID: '{module}.StubAIAlgorithm'.format(module=__name__),
@@ -78,7 +90,7 @@ class AITrainingTest(CacheResetTest):
         # Schedule a training task
         # Because Celery is configured in "always eager" mode,
         # expect the task to be executed synchronously.
-        workflow_uuid = ai_api.train_classifiers(RUBRIC, EXAMPLES, ALGORITHM_ID)
+        workflow_uuid = ai_api.train_classifiers(RUBRIC, EXAMPLES, COURSE_ID, ITEM_ID, ALGORITHM_ID)
 
         # Retrieve the classifier set from the database
         workflow = AITrainingWorkflow.objects.get(uuid=workflow_uuid)
@@ -119,12 +131,12 @@ class AITrainingTest(CacheResetTest):
 
         # Expect a request error
         with self.assertRaises(AITrainingRequestError):
-            ai_api.train_classifiers(RUBRIC, mutated_examples, ALGORITHM_ID)
+            ai_api.train_classifiers(RUBRIC, mutated_examples, COURSE_ID, ITEM_ID, ALGORITHM_ID)
 
     def test_train_classifiers_no_examples(self):
         # Empty list of training examples
         with self.assertRaises(AITrainingRequestError):
-            ai_api.train_classifiers(RUBRIC, [], ALGORITHM_ID)
+            ai_api.train_classifiers(RUBRIC, [], COURSE_ID, ITEM_ID, ALGORITHM_ID)
 
     @override_settings(ORA2_AI_ALGORITHMS=AI_ALGORITHMS)
     @mock.patch.object(AITrainingWorkflow.objects, 'create')
@@ -132,7 +144,7 @@ class AITrainingTest(CacheResetTest):
         # Simulate a database error when creating the training workflow
         mock_create.side_effect = DatabaseError("KABOOM!")
         with self.assertRaises(AITrainingInternalError):
-            ai_api.train_classifiers(RUBRIC, EXAMPLES, ALGORITHM_ID)
+            ai_api.train_classifiers(RUBRIC, EXAMPLES, COURSE_ID, ITEM_ID, ALGORITHM_ID)
 
     @override_settings(ORA2_AI_ALGORITHMS=AI_ALGORITHMS)
     @mock.patch('openassessment.assessment.api.ai.training_tasks')
@@ -140,7 +152,7 @@ class AITrainingTest(CacheResetTest):
         # Simulate an exception raised when scheduling a training task
         mock_training_tasks.train_classifiers.apply_async.side_effect = Exception("KABOOM!")
         with self.assertRaises(AITrainingInternalError):
-            ai_api.train_classifiers(RUBRIC, EXAMPLES, ALGORITHM_ID)
+            ai_api.train_classifiers(RUBRIC, EXAMPLES, COURSE_ID, ITEM_ID, ALGORITHM_ID)
 
 
 class AIGradingTest(CacheResetTest):
@@ -237,3 +249,255 @@ class AIGradingTest(CacheResetTest):
         mock_call.side_effect = DatabaseError("KABOOM!")
         with self.assertRaises(AIGradingInternalError):
             ai_api.get_latest_assessment(self.submission_uuid)
+
+
+def _is_empty_generator(gen):
+        try:
+            next(gen)
+            return False
+        except StopIteration:
+            return True
+
+
+class AIReschedulingTest(CacheResetTest):
+    """
+    Tests AI rescheduling.
+
+    Tests in both orders, and tests all error conditions that can arise as a result of calling rescheduling
+    """
+
+    @contextmanager
+    def _assert_retry(self, task):
+        """
+        Context manager that asserts that the training task was retried.
+
+        Args:
+            task (celery.app.task.Task): The Celery task object.
+            final_exception (Exception): The error thrown after retrying.
+
+        Raises:
+            AssertionError
+
+        """
+
+        #import pudb,sys as __sys;__sys.stdout=__sys.__stdout__;pudb.set_trace() # -={XX}=-={XX}=-={XX}=-
+
+        original_retry = task.retry
+        task.retry = mock.MagicMock()
+        task.retry.side_effect = lambda: original_retry(task)
+        try:
+            yield
+            task.retry.assert_called_once()
+        finally:
+            task.retry = original_retry
+
+    def _is_empty_generator(gen):
+        try:
+            next(gen)
+            return False
+        except StopIteration:
+            return True
+
+    @override_settings(ORA2_AI_ALGORITHMS=AI_ALGORITHMS)
+    def test_reschedule_grading_training_success(self):
+
+        # 1) Schedule Grading, have the scheduling succeeed but the grading fail because no classifiers exist
+        for i in range(1, 10):
+            submission = sub_api.create_submission(STUDENT_ITEM, ANSWER)
+            self.submission_uuid = submission['uuid']
+            ai_api.submit(self.submission_uuid, RUBRIC, ALGORITHM_ID)
+
+        # Checks that there are incomplete grading workflows
+        incomplete_training_workflows = AITrainingWorkflow.get_incomplete_workflows(COURSE_ID, ITEM_ID)
+        incomplete_grading_workflows = AIGradingWorkflow.get_incomplete_workflows(course_id=COURSE_ID, item_id=ITEM_ID)
+        self.assertTrue(_is_empty_generator(incomplete_training_workflows))
+        self.assertFalse(_is_empty_generator(incomplete_grading_workflows))
+
+        # 2) Schedule Training, have it INTENTIONALLY fail. Now we are a point where both parts need to be rescheduled
+        patched_method = 'openassessment.assessment.api.ai.training_tasks.train_classifiers.apply_async'
+        with mock.patch(patched_method) as mock_train_classifiers:
+            mock_train_classifiers.side_effect = Exception('MaxRetriesExceeded')
+            with self.assertRaises(AITrainingInternalError):
+                ai_api.train_classifiers(RUBRIC, EXAMPLES, COURSE_ID, ITEM_ID, ALGORITHM_ID)
+
+        # Checks that there are incomplete Grading AND Training workflows
+        incomplete_training_workflows = AITrainingWorkflow.get_incomplete_workflows(COURSE_ID, ITEM_ID)
+        incomplete_grading_workflows = AIGradingWorkflow.get_incomplete_workflows(course_id=COURSE_ID, item_id=ITEM_ID)
+        self.assertFalse(_is_empty_generator(incomplete_training_workflows))
+        self.assertFalse(_is_empty_generator(incomplete_grading_workflows))
+
+        # TEST: 3) Reschedule Everything, Schedule Training should happen. Schedule Grading should not.
+        # NOTE:    This was a decision made to ensure we don't have a huge amount of scheduled failures.
+        #          For more information, check out the AI API
+
+        ai_api.reschedule_unfinished_tasks(course_id=COURSE_ID, item_id=ITEM_ID)
+
+        incomplete_training_workflows = AITrainingWorkflow.get_incomplete_workflows(course_id=COURSE_ID, item_id=ITEM_ID)
+        incomplete_grading_workflows = AIGradingWorkflow.get_incomplete_workflows(course_id=COURSE_ID, item_id=ITEM_ID)
+        self.assertTrue(_is_empty_generator(incomplete_training_workflows))
+        self.assertFalse(_is_empty_generator(incomplete_grading_workflows))
+
+        # TEST: 4) Reschedule Everything, Schedule Training should not happen, Schedule Grading should.
+        ai_api.reschedule_unfinished_tasks(course_id=COURSE_ID, item_id=ITEM_ID)
+        incomplete_training_workflows = AITrainingWorkflow.get_incomplete_workflows(course_id=COURSE_ID, item_id=ITEM_ID)
+        incomplete_grading_workflows = AIGradingWorkflow.get_incomplete_workflows(course_id=COURSE_ID, item_id=ITEM_ID)
+        self.assertTrue(_is_empty_generator(incomplete_training_workflows))
+        self.assertTrue(_is_empty_generator(incomplete_grading_workflows))
+
+    @override_settings(ORA2_AI_ALGORITHMS=AI_ALGORITHMS)
+    def test_reschedule_training_grading_success(self):
+
+        # 1) Schedule Training, have it INTENTIONALLY fail. Now we are a point where both parts need to be rescheduled
+        patched_method = 'openassessment.assessment.api.ai.training_tasks.train_classifiers.apply_async'
+        with mock.patch(patched_method) as mock_train_classifiers:
+            mock_train_classifiers.side_effect = Exception('MaxRetriesExceeded')
+            with self.assertRaises(AITrainingInternalError):
+                ai_api.train_classifiers(RUBRIC, EXAMPLES, COURSE_ID, ITEM_ID, ALGORITHM_ID)
+
+        incomplete_training_workflows = AITrainingWorkflow.get_incomplete_workflows(COURSE_ID, ITEM_ID)
+        incomplete_grading_workflows = AIGradingWorkflow.get_incomplete_workflows(course_id=COURSE_ID, item_id=ITEM_ID)
+        self.assertFalse(_is_empty_generator(incomplete_training_workflows))
+        self.assertTrue(_is_empty_generator(incomplete_grading_workflows))
+
+        # 2) Schedule Grading, have the scheduling succeeed but the grading fail because no classifiers exist
+        for i in range(1, 10):
+            submission = sub_api.create_submission(STUDENT_ITEM, ANSWER)
+            self.submission_uuid = submission['uuid']
+            ai_api.submit(self.submission_uuid, RUBRIC, ALGORITHM_ID)
+
+        incomplete_training_workflows = AITrainingWorkflow.get_incomplete_workflows(COURSE_ID, ITEM_ID)
+        incomplete_grading_workflows = AIGradingWorkflow.get_incomplete_workflows(course_id=COURSE_ID, item_id=ITEM_ID)
+        self.assertFalse(_is_empty_generator(incomplete_training_workflows))
+        self.assertFalse(_is_empty_generator(incomplete_grading_workflows))
+
+        # TEST: 3) Reschedule Everything, Schedule Training should happen. Schedule Grading should not.
+        # NOTE:    This was a decision made to ensure we don't have a huge amount of scheduled failures.
+        #          For more information, check out the AI API
+        ai_api.reschedule_unfinished_tasks(course_id=COURSE_ID, item_id=ITEM_ID)
+
+        incomplete_training_workflows = AITrainingWorkflow.get_incomplete_workflows(course_id=COURSE_ID, item_id=ITEM_ID)
+        incomplete_grading_workflows = AIGradingWorkflow.get_incomplete_workflows(course_id=COURSE_ID, item_id=ITEM_ID)
+        self.assertTrue(_is_empty_generator(incomplete_training_workflows))
+        self.assertFalse(_is_empty_generator(incomplete_grading_workflows))
+
+        # TEST: 4) Reschedule Everything, Schedule Training should not happen, Schedule Grading should.
+        ai_api.reschedule_unfinished_tasks(course_id=COURSE_ID, item_id=ITEM_ID)
+        incomplete_training_workflows = AITrainingWorkflow.get_incomplete_workflows(course_id=COURSE_ID, item_id=ITEM_ID)
+        incomplete_grading_workflows = AIGradingWorkflow.get_incomplete_workflows(course_id=COURSE_ID, item_id=ITEM_ID)
+        self.assertTrue(_is_empty_generator(incomplete_training_workflows))
+        self.assertTrue(_is_empty_generator(incomplete_grading_workflows))
+
+    @override_settings(ORA2_AI_ALGORITHMS=AI_ALGORITHMS)
+    def test_classifiers_fail_with_error(self):
+        # 1) Schedule Training, have it INTENTIONALLY fail
+        patched_method = 'openassessment.assessment.api.ai.training_tasks.train_classifiers.apply_async'
+        with mock.patch(patched_method) as mock_train_classifiers:
+            mock_train_classifiers.side_effect = Exception('MaxRetriesExceeded')
+            with self.assertRaises(AITrainingInternalError):
+                ai_api.train_classifiers(RUBRIC, EXAMPLES, COURSE_ID, ITEM_ID, ALGORITHM_ID)
+
+        # 2) Mock in an error.
+        patched_method = 'openassessment.assessment.worker.reschedule.training_tasks.train_classifiers.apply_async'
+        with mock.patch(patched_method) as mock_train_classifiers2:
+            mock_train_classifiers2.side_effect = Exception('MaxRetriesExceeded')
+            with self._assert_retry(reschedule_tasks.reschedule_training_tasks):
+                ai_api.reschedule_unfinished_tasks(COURSE_ID, ITEM_ID)
+            #mock_train_classifiers2.assertAnyCall()
+
+    @override_settings(ORA2_AI_ALGORITHMS=AI_ALGORITHMS)
+    def test_reschedule_database_failure(self):
+        # 1) Schedule Training, have it INTENTIONALLY fail
+        patched_method = 'openassessment.assessment.api.ai.training_tasks.train_classifiers.apply_async'
+        with mock.patch(patched_method) as mock_train_classifiers:
+            mock_train_classifiers.side_effect = Exception('MaxRetriesExceeded')
+            with self.assertRaises(AITrainingInternalError):
+                ai_api.train_classifiers(RUBRIC, EXAMPLES, COURSE_ID, ITEM_ID, ALGORITHM_ID)
+
+        # 2) Schedule Grading, have the scheduling succeeed but the grading fail because no classifiers exist
+        for i in range(0, 10):
+            submission = sub_api.create_submission(STUDENT_ITEM, ANSWER)
+            self.submission_uuid = submission['uuid']
+            ai_api.submit(self.submission_uuid, RUBRIC, ALGORITHM_ID)
+
+        # 3) Mock in a DB error.
+        patched_method = 'openassessment.assessment.worker.reschedule.AIClassifierSet.objects.filter'
+        with mock.patch(patched_method) as mock_filter:
+            mock_filter.side_effect = Exception('DB ERROR')
+            with self._assert_retry(reschedule_tasks.reschedule_grading_tasks):
+                # 4) Reschedule all tasks.
+                ai_api.reschedule_unfinished_tasks(COURSE_ID, ITEM_ID)
+
+    @override_settings(ORA2_AI_ALGORITHMS=AI_ALGORITHMS)
+    def test_reschedule_grades_fail_with_error(self):
+         # 1) Schedule Grading, have the scheduling succeeed but the grading fail because no classifiers exist
+        for i in range(0, 10):
+            submission = sub_api.create_submission(STUDENT_ITEM, ANSWER)
+            self.submission_uuid = submission['uuid']
+            ai_api.submit(self.submission_uuid, RUBRIC, ALGORITHM_ID)
+
+        # 2) Schedule Training, have it INTENTIONALLY fail. Now we are a point where both parts need to be rescheduled
+        patched_method = 'openassessment.assessment.api.ai.training_tasks.train_classifiers.apply_async'
+        with mock.patch(patched_method) as mock_train_classifiers:
+            mock_train_classifiers.side_effect = Exception('MaxRetriesExceeded')
+            with self.assertRaises(AITrainingInternalError):
+                ai_api.train_classifiers(RUBRIC, EXAMPLES, COURSE_ID, ITEM_ID, ALGORITHM_ID)
+
+        # 3) Reschedule Everything, only training will be done
+        ai_api.reschedule_unfinished_tasks(course_id=COURSE_ID, item_id=ITEM_ID)
+
+        # 4) These are the values we will assign to the different unfinished grading tasks
+        response_vals = [None, None, AIError, None, AIAlgorithmError, AIError, None, None, None, AIError]
+
+        # 5) Patching these values to our grade_essay method allows us to explore both the success and failure
+        #    conditions rather than testing them independently.
+
+        patched_method = 'openassessment.assessment.worker.reschedule.grading_tasks.grade_essay.apply_async'
+        with mock.patch(patched_method) as mock_grade_essay:
+            mock_grade_essay.side_effect = response_vals
+            with self._assert_retry(reschedule_tasks.reschedule_grading_tasks):
+                ai_api.reschedule_unfinished_tasks(course_id=COURSE_ID, item_id=ITEM_ID)
+
+    @override_settings(ORA2_AI_ALGORITHMS=AI_ALGORITHMS)
+    def test_reschedule_grading_training_success_large(self):
+
+        # 1) Schedule Grading, have the scheduling succeeed but the grading fail because no classifiers exist
+        for i in range(0, 45):
+            submission = sub_api.create_submission(STUDENT_ITEM, ANSWER)
+            self.submission_uuid = submission['uuid']
+            ai_api.submit(self.submission_uuid, RUBRIC, ALGORITHM_ID)
+
+        # Checks that there are incomplete grading workflows
+        incomplete_training_workflows = AITrainingWorkflow.get_incomplete_workflows(COURSE_ID, ITEM_ID)
+        incomplete_grading_workflows = AIGradingWorkflow.get_incomplete_workflows(course_id=COURSE_ID, item_id=ITEM_ID)
+        self.assertTrue(_is_empty_generator(incomplete_training_workflows))
+        self.assertFalse(_is_empty_generator(incomplete_grading_workflows))
+
+        # 2) Schedule Training, have it INTENTIONALLY fail. Now we are a point where both parts need to be rescheduled
+        patched_method = 'openassessment.assessment.api.ai.training_tasks.train_classifiers.apply_async'
+        with mock.patch(patched_method) as mock_train_classifiers:
+            mock_train_classifiers.side_effect = Exception('MaxRetriesExceeded')
+            with self.assertRaises(AITrainingInternalError):
+                ai_api.train_classifiers(RUBRIC, EXAMPLES, COURSE_ID, ITEM_ID, ALGORITHM_ID)
+
+        # Checks that there are incomplete Grading AND Training workflows
+        incomplete_training_workflows = AITrainingWorkflow.get_incomplete_workflows(COURSE_ID, ITEM_ID)
+        incomplete_grading_workflows = AIGradingWorkflow.get_incomplete_workflows(course_id=COURSE_ID, item_id=ITEM_ID)
+        self.assertFalse(_is_empty_generator(incomplete_training_workflows))
+        self.assertFalse(_is_empty_generator(incomplete_grading_workflows))
+
+        # TEST: 3) Reschedule Everything, Schedule Training should happen. Schedule Grading should not.
+        # NOTE:    This was a decision made to ensure we don't have a huge amount of scheduled failures.
+        #          For more information, check out the AI API
+        ai_api.reschedule_unfinished_tasks(course_id=COURSE_ID, item_id=ITEM_ID)
+
+        incomplete_training_workflows = AITrainingWorkflow.get_incomplete_workflows(course_id=COURSE_ID, item_id=ITEM_ID)
+        incomplete_grading_workflows = AIGradingWorkflow.get_incomplete_workflows(course_id=COURSE_ID, item_id=ITEM_ID)
+        self.assertTrue(_is_empty_generator(incomplete_training_workflows))
+        self.assertFalse(_is_empty_generator(incomplete_grading_workflows))
+
+        # TEST: 4) Reschedule Everything, Schedule Training should not happen, Schedule Grading should.
+        ai_api.reschedule_unfinished_tasks(course_id=COURSE_ID, item_id=ITEM_ID)
+        incomplete_training_workflows = AITrainingWorkflow.get_incomplete_workflows(course_id=COURSE_ID, item_id=ITEM_ID)
+        incomplete_grading_workflows = AIGradingWorkflow.get_incomplete_workflows(course_id=COURSE_ID, item_id=ITEM_ID)
+        self.assertTrue(_is_empty_generator(incomplete_training_workflows))
+        self.assertTrue(_is_empty_generator(incomplete_grading_workflows))

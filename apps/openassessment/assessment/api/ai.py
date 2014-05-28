@@ -19,6 +19,7 @@ from openassessment.assessment.models import (
 )
 from openassessment.assessment.worker import training as training_tasks
 from openassessment.assessment.worker import grading as grading_tasks
+from openassessment.assessment.worker import reschedule as reschedule_tasks
 
 
 logger = logging.getLogger(__name__)
@@ -150,7 +151,7 @@ def get_latest_assessment(submission_uuid):
         return None
 
 
-def train_classifiers(rubric_dict, examples, algorithm_id):
+def train_classifiers(rubric_dict, examples, course_id, item_id, algorithm_id):
     """
     Schedule a task to train classifiers.
     All training examples must match the rubric!
@@ -184,7 +185,7 @@ def train_classifiers(rubric_dict, examples, algorithm_id):
 
     # Create the workflow model
     try:
-        workflow = AITrainingWorkflow.start_workflow(examples, algorithm_id)
+        workflow = AITrainingWorkflow.start_workflow(examples, course_id, item_id, algorithm_id)
     except NoTrainingExamples as ex:
         raise AITrainingRequestError(ex)
     except:
@@ -227,6 +228,21 @@ def reschedule_unfinished_tasks(course_id=None, item_id=None, task_type=None):
 
     Raises:
         AIError
+        AITrainingRequestError
+        AITrainingInternalError
 
     """
-    pass
+
+    # Reschedules all of the grading tasks
+    if task_type is not u"train":
+        try:
+            reschedule_tasks.reschedule_grading_tasks.apply_async(args=[course_id, item_id])
+        except Exception as ex:
+            raise AIGradingInternalError(ex)
+
+    # Reschedules all of the training tasks
+    if task_type is not u"grade":
+        try:
+            reschedule_tasks.reschedule_training_tasks.apply_async(args=[course_id, item_id])
+        except Exception as ex:
+            raise AITrainingInternalError(ex)

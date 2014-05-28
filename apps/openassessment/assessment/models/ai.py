@@ -220,6 +220,10 @@ class AIWorkflow(models.Model):
     # Unique identifier used to track this workflow
     uuid = UUIDField(version=1, db_index=True)
 
+    # Course Entity and Item Discriminator
+    course_id = models.CharField(max_length=40, db_index=True)
+    item_id = models.CharField(max_length=128, db_index=True)
+
     # Timestamps
     # The task is *scheduled* as soon as a client asks the API to
     # train classifiers.
@@ -287,7 +291,7 @@ class AITrainingWorkflow(AIWorkflow):
 
     @classmethod
     @transaction.commit_on_success
-    def start_workflow(cls, examples, algorithm_id):
+    def start_workflow(cls, examples, course_id, item_id, algorithm_id):
         """
         Start a workflow to track a training task.
 
@@ -305,7 +309,7 @@ class AITrainingWorkflow(AIWorkflow):
         if len(examples) == 0:
             raise NoTrainingExamples()
 
-        workflow = AITrainingWorkflow.objects.create(algorithm_id=algorithm_id)
+        workflow = AITrainingWorkflow.objects.create(algorithm_id=algorithm_id, item_id=item_id, course_id=course_id)
         workflow.training_examples.add(*examples)
         workflow.save()
         return workflow
@@ -353,6 +357,47 @@ class AITrainingWorkflow(AIWorkflow):
         )
         self.mark_complete_and_save()
 
+    @classmethod
+    def get_incomplete_workflows(cls, course_id, item_id):
+        """
+        Gets all incomplete training workflows for a given course and item.
+
+        Args:
+            course_id (unicode): Uniquely identifies the course
+            item_id (unicode): The discriminator for the item we are looking for
+
+        Yeilds:
+            A delayed iterable which will contain all incomplete training workflows for the problem.
+
+        Raises:
+            DatabaseError
+        """
+
+        # Finds the size of the total result
+        training_qs = AITrainingWorkflow.objects.filter(course_id=course_id, item_id=item_id, completed_at=None)
+        total_results = training_qs.count()
+
+        # Defines loop variables. Query Interval could be set globally
+        start = 0
+        query_interval = 100
+        number_yielded = 0
+
+        # Continues to stream out results until all workflows in the queryset have been output
+        while number_yielded < total_results:
+            # Defines the bounds of the slice of our query we are taking
+            end = start + query_interval
+            # Selects a slice of the query we are looking for to evaluate and store in memory
+            query = AITrainingWorkflow.objects.filter(
+                course_id=course_id, item_id=item_id, completed_at=None
+            ).order_by('scheduled_at')[start:end]
+
+            # Returns this batch of training_workflows to the user, completing generating function
+            for training_workflow in query:
+                number_yielded += 1
+                yield training_workflow
+
+            start += query_interval
+
 
 class AIGradingWorkflow(AIWorkflow):
     """
@@ -391,8 +436,6 @@ class AIGradingWorkflow(AIWorkflow):
     # associated with one submission, it's safe to duplicate
     # this information here from the submissions models.
     student_id = models.CharField(max_length=40, db_index=True)
-    item_id = models.CharField(max_length=128, db_index=True)
-    course_id = models.CharField(max_length=40, db_index=True)
 
     @classmethod
     @transaction.commit_on_success
@@ -468,3 +511,45 @@ class AIGradingWorkflow(AIWorkflow):
 
         self.assessment = assessment
         self.mark_complete_and_save()
+
+    @classmethod
+    def get_incomplete_workflows(cls, course_id, item_id):
+        """
+        Gets all incomplete grading workflows for a given course and item.
+
+        Args:
+            course_id (unicode): Uniquely identifies the course
+            item_id (unicode): The discriminator for the item we are looking for
+
+        Yeilds:
+            All complete grading workflows for this item, as a delayed "stream"
+
+        Raises:
+            DatabaseError
+        """
+
+        # Finds the size of the result of the query
+        grade_qs = AIGradingWorkflow.objects.filter(course_id=course_id, item_id=item_id, completed_at=None)
+        total_results = grade_qs.count()
+
+        # Defines our loop variables, note that query_interval could be set globally
+        query_interval = 100
+        number_yielded = 0
+        start = 0
+
+        # Continues to generate output until all workflows in the queryset have been output
+        while number_yielded < total_results:
+            # Defines the slice for this iteration of the while loop
+            end = start + query_interval
+            # Executes our sliced query and stores its contents in memory
+            query = AIGradingWorkflow.objects.filter(
+                course_id=course_id, item_id=item_id, completed_at=None
+            ).order_by('scheduled_at')[start:end]
+
+            # Returns the values within this batch of grading_workflows to the calling function
+            for grading_workflow in query:
+                number_yielded += 1
+                yield grading_workflow
+
+            # Moves the pointer for our next slice to the end of our current slice
+            start = end
