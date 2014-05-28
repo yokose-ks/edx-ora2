@@ -185,6 +185,16 @@ class AIGradingTest(CacheResetTest):
             expected_score = self.CLASSIFIER_SCORE_OVERRIDES[criterion_name]['score_override']
             self.assertEqual(part['option']['points'], expected_score)
 
+        score = ai_api.get_score(self.submission_uuid, {})
+        self.assertEquals(score["points_possible"], 4)
+        self.assertEquals(score["points_earned"], 3)
+
+    def test_no_score(self):
+        # Test that no score has been created, and get_score returns None.
+        ai_api.submit(self.submission_uuid, RUBRIC, ALGORITHM_ID)
+        score = ai_api.get_score(self.submission_uuid, {})
+        self.assertIsNone(score)
+
     @mock.patch('openassessment.assessment.api.ai.grading_tasks.grade_essay')
     @override_settings(ORA2_AI_ALGORITHMS=AI_ALGORITHMS)
     def test_submit_no_classifiers_available(self, mock_task):

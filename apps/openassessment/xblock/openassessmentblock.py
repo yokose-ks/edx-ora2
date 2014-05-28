@@ -292,8 +292,9 @@ class OpenAssessmentBlock(
         """
         ui_models = [UI_MODELS["submission"]]
         for assessment in self.valid_assessments:
-            ui_model = UI_MODELS[assessment["name"]]
-            ui_models.append(dict(assessment, **ui_model))
+            ui_model = UI_MODELS.get(assessment["name"])
+            if ui_model:
+                ui_models.append(dict(assessment, **ui_model))
         ui_models.append(UI_MODELS["grade"])
         return ui_models
 
@@ -309,6 +310,10 @@ class OpenAssessmentBlock(
             (
                 "OpenAssessmentBlock Unicode",
                 load('static/xml/unicode.xml')
+            ),
+            (
+                "OpenAssessmentBlock Example Based Rubric",
+                load('static/xml/example_based_example.xml')
             ),
             (
                 "OpenAssessmentBlock Poverty Rubric",
