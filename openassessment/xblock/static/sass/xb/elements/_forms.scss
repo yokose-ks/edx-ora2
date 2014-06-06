@@ -25,7 +25,7 @@
     border: 1px solid $color-decorative-secondary;
     padding: ($baseline-v/2);
     outline: 0;
-    color: $copy-color;
+    /*color: $copy-color;*/
 
     @include placeholder {
       @extend %t-regular;
