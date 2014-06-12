@@ -433,10 +433,7 @@ OpenAssessment.ResponseView.prototype = {
         * rejected if the user cancels the submission
     **/
     confirmSubmission: function() {
-        var msg = (
-            "You're about to submit your response for this assignment. " +
-            "After you submit this response, you can't change it or submit a new response."
-        );
+        var msg = gettext("You're about to submit your response for this assignment. After you submit this response, you can't change it or submit a new response.");
         // TODO -- UI for confirmation dialog instead of JS confirm
         return $.Deferred(function(defer) {
             if (confirm(msg)) { defer.resolve(); }
