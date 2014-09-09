@@ -287,7 +287,7 @@ class PeerWorkflow(models.Model):
                 "   and (pwi.assessment_id is not NULL or pwi.started_at > %s) "
                 ") < %s "
                 "order by pw.created_at, pw.id "
-                "limit 1; ",
+                "limit 10; ",
                 [
                     self.item_id,
                     self.course_id,
@@ -299,8 +299,7 @@ class PeerWorkflow(models.Model):
             ))
             if not peer_workflows:
                 return None
-
-            return peer_workflows[0].submission_uuid
+            return random.choice(peer_workflows).submission_uuid
         except DatabaseError:
             error_message = (
                 u"An internal error occurred while retrieving a peer submission "
@@ -319,19 +318,22 @@ class PeerWorkflow(models.Model):
         #  1) Does not belong to you
         #  2) Is not something you have already scored
         try:
-            query = list(PeerWorkflow.objects.raw(
-                "select pw.id, pw.submission_uuid "
-                "from assessment_peerworkflow pw "
-                "where course_id=%s "
-                "and item_id=%s "
-                "and student_id<>%s "
-                "and pw.id not in ( "
-                    "select pwi.author_id "
-                    "from assessment_peerworkflowitem pwi "
-                    "where pwi.scorer_id=%s); ",
-                [self.course_id, self.item_id, self.student_id, self.id]
-            ))
-            workflow_count = len(query)
+            #query = list(PeerWorkflow.objects.raw(
+            #    "select pw.id, pw.submission_uuid "
+            #    "from assessment_peerworkflow pw "
+            #    "where course_id=%s "
+            #    "and item_id=%s "
+            #    "and student_id<>%s "
+            #    "and pw.id not in ( "
+            #        "select pwi.author_id "
+            #        "from assessment_peerworkflowitem pwi "
+            #        "where pwi.scorer_id=%s); ",
+            #    [self.course_id, self.item_id, self.student_id, self.id]
+            #))
+            # Note: RawQuerySet doesn't have a count method, so replace it
+            query = PeerWorkflow.objects.filter(course_id=self.course_id, item_id=self.item_id).exclude(student_id=self.student_id).exclude(graded_by__scorer_id=self.id).order_by()
+            #workflow_count = len(query)
+            workflow_count = query.count()
             if workflow_count < 1:
                 return None
 
