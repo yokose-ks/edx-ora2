@@ -94,7 +94,7 @@
 
                         <ul class="list list--actions">
                             <li class="list--actions__item">
-                                <button type="submit" id="submission__save" class="action action--save submission__save is--disabled">{% trans "Save Your Progress" %}</button>
+                                <button type="submit" id="submission__save" class="action action--save submission__save is--disabled" style="background-color:#43ac6a; border-color:#007095;">{% trans "Save Your Progress" %}</button>
 
                                 <div id="response__save_status" class="response__submission__status">
                                     <h3 class="response__submission__status__title">
@@ -135,7 +135,7 @@
                 <ul class="list list--actions">
                     <li class="list--actions__item">
                         <a aria-role="button" href="#" id="step--response__submit"
-                            class="action action--submit step--response__submit {{ submit_enabled|yesno:",is--disabled" }}">
+                            class="action action--submit step--response__submit {{ submit_enabled|yesno:",is--disabled" }}" style="background-color:#008cba; border-color:#007095;">
                             <span class="copy">{% trans "Submit your response and move to the next step" %}</span>
                             <i class="ico icon-caret-right"></i>
                         </a>
