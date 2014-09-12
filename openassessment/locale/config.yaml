@@ -82,3 +82,12 @@ ignore_dirs:
     - scripts
     - settings
     - storage
+
+# How should the generate step merge files?
+generate_merge:
+    django.po:
+        - openassessment.po
+        - gacco.po
+    djangojs.po:
+        - openassessment-js.po
+        - gaccojs.po
