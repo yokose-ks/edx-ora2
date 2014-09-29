@@ -255,8 +255,6 @@ def get_assessment_module(assessments, mixin_name):
     for assessment in assessments:
         if assessment["name"] == mixin_name:
             return assessment
-    else:
-        raise CommandError("No such assessment named %s was found." % mixin_name)
 
 
 # Note: modified from openassessment/assessment/models/base.py Assessment.scores_by_criterion()
