@@ -65,6 +65,7 @@
                     id="assessment__rubric__question--feedback__value"
                     placeholder="{{ rubric_feedback_default_text }}"
                     maxlength="500"
+                    {% if peer_submission %}required{% endif %}
                 >
                 </textarea>
             </div>
