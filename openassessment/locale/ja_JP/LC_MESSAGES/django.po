@@ -1068,9 +1068,7 @@ msgid ""
 "you've completed all the steps for this problem and your peers have assessed"
 " your response."
 msgstr ""
-"すべての提出されたレポートが採点されました。しばらくしてから再度このページを開き、他の受講者が採点を完了していないか確認してください。 あなたの得点は "
-"相互採点（あなたが右上に表示されている規定数分の他の受講者のレポートを採点しなくてはなりません）と "
-"自己採点（ご自身のレポートも採点しなくてはなりません） が終わり、あなたのレポートが別途規定された数の他の受講者から採点されると表示されます"
+"提出済のレポートが全て採点済となり、採点ができない状態です。しばらく経ってから、こちらのページで他の受講者が新しいレポートを提出したかどうかを確認してください。あなたがスコアを得るためには、この課題の全てのステップを完了し、かつ、あなたのレポートが第三者に採点を受けることが必要です。"
 
 #. Translators: This string displays a date to the user, then tells them the
 #. time until that date.  Example: "due August 13th, 2014 (in 5 days and 45
