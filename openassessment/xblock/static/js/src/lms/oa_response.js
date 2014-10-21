@@ -32,8 +32,8 @@ OpenAssessment.ResponseView.prototype = {
     // before we can autosave.
     AUTO_SAVE_WAIT: 30000,
 
-    // Maximum file size (5 MB) for an attached file.
-    MAX_FILE_SIZE: 5242880,
+    // Maximum file size (4 MB) for an attached file.
+    MAX_FILE_SIZE: 4194304,
 
     /**
     Load the response (submission) view.
@@ -457,7 +457,7 @@ OpenAssessment.ResponseView.prototype = {
         this.imageType = files[0].type;
         if (files[0].size > this.MAX_FILE_SIZE) {
             this.baseView.toggleActionError(
-                'upload', gettext("File size must be 5MB or less.")
+                'upload', gettext("File size must be 4MB or less.")
             );
         } else if (this.imageType.substring(0,6) != 'image/') {
             this.baseView.toggleActionError(
