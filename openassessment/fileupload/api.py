@@ -5,6 +5,7 @@ URLs to the new location.
 
 """
 import boto
+from boto.s3.key import Key
 import logging
 from django.conf import settings
 
@@ -49,6 +50,38 @@ FILE_STORAGE_SETTING = "FILE_UPLOAD_STORAGE_PREFIX"
 
 # The default file storage prefix.
 FILE_STORAGE = "submissions_attachments"
+
+
+def upload_file(key, fp):
+    """Uploads an image file for submission.
+
+    Args:
+        key (str): A unique identifier used to construct the upload location and
+            later, can be used to retrieve the same information. This service
+            must be able to identify data for both upload and download using
+            this key.
+        fp (file): The file whose contents to upload.
+
+    Returns:
+        A URL (str) to use for downloading related files.
+
+    Raises:
+        FileUploadInternalError: Raised when an internal error occurs while
+            uploading the file.
+
+    """
+    bucket_name, key_name = _retrieve_parameters(key)
+    try:
+        conn = _connect_to_s3()
+        bucket = conn.get_bucket(bucket_name)
+        s3_key = Key(bucket=bucket, name=key_name)
+        s3_key.set_contents_from_file(fp, size=fp.size)
+        return s3_key.generate_url(expires_in=1000)
+    except Exception as ex:
+        logger.exception(
+            u"An internal exception occurred while uploading a file."
+        )
+        raise FileUploadInternalError(ex)
 
 
 def get_upload_url(key, content_type):

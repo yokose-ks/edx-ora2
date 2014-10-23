@@ -16,3 +16,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Language: ja_JP\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
+
+#: openassessment/xblock/submission_mixin.py
+msgid "Error uploading file."
+msgstr "ファイルアップロードに失敗しました。"

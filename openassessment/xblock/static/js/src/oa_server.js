@@ -504,6 +504,39 @@ if (typeof OpenAssessment.Server == "undefined" || !OpenAssessment.Server) {
         },
 
         /**
+         Upload an image file via ora2 server.
+
+         Args:
+            contentType (str): The Content Type for the file being uploaded.
+            file (File): The HTML5 file reference.
+
+         Returns:
+            A presigned upload URL from the specified service used for uploading
+            files.
+
+         **/
+        uploadFile: function(contentType, file) {
+            var url = this.url('upload_file');
+            var formData = new FormData();
+            formData.append('file', file);
+            return $.Deferred(function(defer) {
+                $.ajax({
+                    type: "POST",
+                    url: url,
+                    processData: false,
+                    contentType: false,
+                    //timeout: 30 * 1000,
+                    data: formData
+                }).done(function(data) {
+                        if (data.success) { defer.resolve(data.url); }
+                        else { defer.rejectWith(this, [data.msg]); }
+                    }).fail(function(data) {
+                        defer.rejectWith(this, [gettext('Could not upload file. Try again later.')]);
+                    });
+            }).promise();
+        },
+
+        /**
          Get an upload url used to asynchronously post related files for the
          submission.
 

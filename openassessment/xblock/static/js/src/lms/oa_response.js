@@ -477,10 +477,7 @@ OpenAssessment.ResponseView.prototype = {
 
 
     /**
-     Manages file uploads for submission attachments. Retrieves a one-time
-     upload URL from the server, and uses it to upload images to a designated
-     location.
-
+     Manages file uploads for submission attachments.
      **/
     fileUpload: function() {
         var view = this;
@@ -492,22 +489,12 @@ OpenAssessment.ResponseView.prototype = {
             fileUpload.removeClass("is--disabled");
         };
 
-        // Call getUploadUrl to get the one-time upload URL for this file. Once
-        // completed, execute a sequential AJAX call to upload to the returned
-        // URL. This request requires appropriate CORS configuration for AJAX
-        // PUT requests on the server.
-        this.server.getUploadUrl(view.imageType).done(
+        // Upload image file via ora2 server
+        this.server.uploadFile(view.imageType, view.files[0]).done(
             function(url) {
-                var image = view.files[0];
-                view.fileUploader.upload(url, image)
-                    .done(function() {
-                        view.server.getDownloadUrl().done(function(url) {
-                            view.imageUrl(url);
-                            view.handleResponseChanged();
-                        });
-                        view.baseView.toggleActionError('upload', null);
-                    })
-                    .fail(handleError);
+                view.imageUrl(url);
+                view.baseView.toggleActionError('upload', null);
+                view.handleResponseChanged();
             }
         ).fail(handleError);
     },
