@@ -1,4 +1,6 @@
+import json
 import logging
+from webob import Response
 
 from xblock.core import XBlock
 
@@ -174,6 +176,31 @@ class SubmissionMixin(object):
         )
 
         return submission
+
+    @XBlock.handler
+    def upload_file(self, data, suffix=''):
+        """
+        Uploade an image file for this submission.
+
+        Returns:
+            A JSON-formatted response.
+
+        """
+        file = data.POST.get('file').file
+        if not hasattr(file, 'content_type'):
+            return json_response({'success': False, 'msg': self._(u"Must specify contentType.")})
+        content_type = file.content_type
+
+        if not content_type.startswith('image/'):
+            return json_response({'success': False, 'msg': self._(u"contentType must be an image.")})
+
+        try:
+            key = self._get_student_item_key()
+            url = file_upload_api.upload_file(key, file)
+            return json_response({'success': True, 'url': url})
+        except FileUploadError:
+            logger.exception("Error uploading file.")
+            return json_response({'success': False, 'msg': self._(u"Error uploading file.")})
 
     @XBlock.json_handler
     def upload_url(self, data, suffix=''):
@@ -370,3 +397,11 @@ class SubmissionMixin(object):
             path = 'openassessmentblock/response/oa_response_submitted.html'
 
         return path, context
+
+
+def json_response(data):
+    """
+    Return a Response with the data json-serialized and the right content
+    type header.
+    """
+    return Response(json.dumps(data), content_type="application/json")
