@@ -342,7 +342,8 @@ class SubmissionMixin(object):
         context['has_self'] = 'self-assessment' in self.assessment_steps
 
         if self.allow_file_upload:
-            context['file_url'] = self._get_download_url()
+            file_url = self._get_download_url()
+            context['file_url'] = file_url
 
         if not workflow and problem_closed:
             if reason == 'due':
@@ -353,7 +354,8 @@ class SubmissionMixin(object):
         elif not workflow:
             context['saved_response'] = self.saved_response
             context['save_status'] = self.save_status
-            context['submit_enabled'] = self.saved_response != ''
+            # Note: Disable submit button before attachment file is uploaded
+            context['submit_enabled'] = self.saved_response != '' and (not self.allow_file_upload or file_url != '')
             path = "openassessmentblock/response/oa_response.html"
         elif workflow["status"] == "done":
             student_submission = self.get_user_submission(

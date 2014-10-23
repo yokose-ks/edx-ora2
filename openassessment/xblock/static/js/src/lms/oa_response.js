@@ -13,6 +13,7 @@ OpenAssessment.ResponseView = function(element, server, fileUploader, baseView) 
     this.element = element;
     this.server = server;
     this.fileUploader = fileUploader;
+    this.fileUploadAllowed = false;
     this.baseView = baseView;
     this.savedResponse = "";
     this.files = null;
@@ -46,6 +47,10 @@ OpenAssessment.ResponseView.prototype = {
                 $('#openassessment__response', view.element).replaceWith(html);
                 view.installHandlers();
                 view.setAutoSaveEnabled(true);
+                // Set flag to determine whether image attachments are allowed
+                if ($('#submission__answer__image', view.element).size() != 0) {
+                    view.fileUploadAllowed = true;
+                }
             }
         ).fail(function(errMsg) {
             view.baseView.showLoadError('response');
@@ -110,7 +115,6 @@ OpenAssessment.ResponseView.prototype = {
             function(eventObject) {
                 // Override default form submission
                 eventObject.preventDefault();
-                $('.submission__answer__display__image', view.element).removeClass('is--hidden');
                 view.fileUpload();
             }
         );
@@ -313,7 +317,9 @@ OpenAssessment.ResponseView.prototype = {
     handleResponseChanged: function() {
         // Enable the save/submit button only for non-blank responses
         var isBlank = ($.trim(this.response()) !== '');
-        this.submitEnabled(isBlank);
+        // If image attachments are allowed, need to check whether file is already uploaded
+        var isUploaded = (!this.fileUploadAllowed || this.imageUrl() != '');
+        this.submitEnabled(isBlank && isUploaded);
 
         // Update the save button, save status, and "unsaved changes" warning
         // only if the response has changed
@@ -353,7 +359,6 @@ OpenAssessment.ResponseView.prototype = {
             // ... but update the UI based on what the user may have entered
             // since hitting the save button.
             var currentResponse = view.response();
-            view.submitEnabled(currentResponse !== '');
             if (currentResponse == savedResponse) {
                 view.saveEnabled(false);
                 view.saveStatus(gettext("This response has been saved but not submitted."));
@@ -496,7 +501,10 @@ OpenAssessment.ResponseView.prototype = {
                 var image = view.files[0];
                 view.fileUploader.upload(url, image)
                     .done(function() {
-                        view.imageUrl();
+                        view.server.getDownloadUrl().done(function(url) {
+                            view.imageUrl(url);
+                            view.handleResponseChanged();
+                        });
                         view.baseView.toggleActionError('upload', null);
                     })
                     .fail(handleError);
@@ -507,13 +515,13 @@ OpenAssessment.ResponseView.prototype = {
     /**
      Set the image URL, or retrieve it.
      **/
-    imageUrl: function() {
-        var view = this;
-        var image = $('#submission__answer__image', view.element);
-        view.server.getDownloadUrl().done(function(url) {
-            image.attr('src', url);
-            return url;
-        });
+    imageUrl: function(url) {
+        var sel = $('#submission__answer__image', this.element);
+        if (typeof url === 'undefined') {
+            return sel.attr('src');
+        } else {
+            sel.attr('src', url);
+        }
     }
 
 };
