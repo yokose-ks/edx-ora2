@@ -72,8 +72,9 @@ OpenAssessment.ResponseView.prototype = {
         var handleChange = function(eventData) { view.handleResponseChanged(); };
         sel.find('#submission__answer__value').on('change keyup drop paste', handleChange);
 
-        var handlePrepareUpload = function(eventData) { view.prepareUpload(eventData.target.files); };
-        sel.find('input[type=file]').on('change', handlePrepareUpload);
+        // Install upload handler (to input[type=file] button)
+        var handleUpload = function(eventData) { view.prepareUpload(eventData.target.files); };
+        sel.find('input[type=file]').on('change', handleUpload);
         // keep the preview as display none at first 
         sel.find('#submission__preview__item').hide();
 
@@ -107,15 +108,6 @@ OpenAssessment.ResponseView.prototype = {
                 // Render in mathjax
                 sel.find('#submission__preview__item').show();
                 MathJax.Hub.Queue(['Typeset', MathJax.Hub, preview_container[0]]);
-            }
-        );
-
-        // Install a click handler for the save button
-        sel.find('#file__upload').click(
-            function(eventObject) {
-                // Override default form submission
-                eventObject.preventDefault();
-                view.fileUpload();
             }
         );
     },
@@ -471,8 +463,8 @@ OpenAssessment.ResponseView.prototype = {
         } else {
             this.baseView.toggleActionError('upload', null);
             this.files = files;
+            this.fileUpload();
         }
-        $("#file__upload").toggleClass("is--disabled", this.files === null);
     },
 
 
@@ -481,12 +473,11 @@ OpenAssessment.ResponseView.prototype = {
      **/
     fileUpload: function() {
         var view = this;
-        var fileUpload = $("#file__upload");
-        fileUpload.addClass("is--disabled");
+        view.submitEnabled(false);
 
         var handleError = function(errMsg) {
             view.baseView.toggleActionError('upload', errMsg);
-            fileUpload.removeClass("is--disabled");
+            view.handleResponseChanged();
         };
 
         // Upload image file via ora2 server
@@ -494,7 +485,10 @@ OpenAssessment.ResponseView.prototype = {
             function(url) {
                 view.imageUrl(url);
                 view.baseView.toggleActionError('upload', null);
-                view.handleResponseChanged();
+                // Enable submit button after loading image
+                $('#submission__answer__image', view.element).load(function() {
+                    view.handleResponseChanged();
+                });
             }
         ).fail(handleError);
     },
