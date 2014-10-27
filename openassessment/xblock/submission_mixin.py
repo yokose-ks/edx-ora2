@@ -2,6 +2,8 @@ import json
 import logging
 from webob import Response
 
+import magic
+
 from xblock.core import XBlock
 
 from submissions import api
@@ -186,10 +188,13 @@ class SubmissionMixin(object):
             A JSON-formatted response.
 
         """
-        file = data.POST.get('file').file
-        if not hasattr(file, 'content_type'):
+        try:
+            file = data.POST.get('file').file
+            content_type = magic.from_buffer(file.read(), mime=True)
+            file.seek(0)
+        except Exception:
+            logger.exception("Error specifying contentType.")
             return json_response({'success': False, 'msg': self._(u"Must specify contentType.")})
-        content_type = file.content_type
 
         if not content_type.startswith('image/'):
             return json_response({'success': False, 'msg': self._(u"contentType must be an image.")})
