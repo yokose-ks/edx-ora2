@@ -1,6 +1,7 @@
 import boto
 from boto.s3.key import Key
 import ddt
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.test.utils import override_settings
 from moto import mock_s3
@@ -10,6 +11,19 @@ from openassessment.fileupload import api
 
 @ddt.ddt
 class TestFileUploadService(TestCase):
+
+    @mock_s3
+    @override_settings(
+        AWS_ACCESS_KEY_ID='foobar',
+        AWS_SECRET_ACCESS_KEY='bizbaz',
+        FILE_UPLOAD_STORAGE_BUCKET_NAME="mybucket"
+    )
+    def test_upload_file(self):
+        conn = boto.connect_s3()
+        conn.create_bucket('mybucket')
+        file = SimpleUploadedFile('test.txt', 'test', 'text/plain')
+        downloadUrl = api.upload_file("foo", file)
+        self.assertIn("https://mybucket.s3.amazonaws.com/submissions_attachments/foo", downloadUrl)
 
     @mock_s3
     @override_settings(
@@ -45,6 +59,19 @@ class TestFileUploadService(TestCase):
     @raises(api.FileUploadRequestError)
     def test_get_upload_url_no_key(self):
         api.get_upload_url("", "bar")
+
+    @mock_s3
+    @override_settings(
+        AWS_ACCESS_KEY_ID='foobar',
+        AWS_SECRET_ACCESS_KEY='bizbaz',
+        FILE_UPLOAD_STORAGE_BUCKET_NAME="mybucket"
+    )
+    @patch.object(boto, 'connect_s3')
+    @raises(api.FileUploadInternalError, mock_s3)
+    def test_upload_file_error(self, mock_s3):
+        mock_s3.side_effect = Exception("Oh noes")
+        file = SimpleUploadedFile('test.txt', 'test', 'text/plain')
+        api.upload_file("foo", file)
 
     @mock_s3
     @override_settings(
