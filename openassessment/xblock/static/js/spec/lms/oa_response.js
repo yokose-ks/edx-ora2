@@ -32,6 +32,11 @@ describe("OpenAssessment.ResponseView", function() {
             return successPromise;
         };
 
+        this.uploadError = false;
+        this.uploadFile = function(contentType, file) {
+            return this.uploadError ? errorPromise : successPromiseWithUrl;
+        };
+
         this.uploadUrlError = false;
         this.getUploadUrl = function(contentType) {
             return this.uploadUrlError ? errorPromise : successPromiseWithUrl;
@@ -149,18 +154,54 @@ describe("OpenAssessment.ResponseView", function() {
         expect(view.saveStatus()).toContain('This response has not been saved.');
     });
 
-    it("updates submit/save buttons and save status when the user saves a response", function() {
-        // Response is blank --> save/submit button is disabled
+    it("updates submit button when file has not uploaded and response text changes", function() {
+        // Set file upload feature enabled
+        loadFixtures('oa_response_with_file_upload.html');
+        view.fileUploadAllowed = true;
+        // Set uploaded image url blank
+        view.imageUrl('');
+
+        // Response is blank --> submit button disabled
+        view.response('');
+        view.handleResponseChanged();
+        expect(view.submitEnabled()).toBe(false);
+
+        // Response is not blank --> submit button remains disabled
+        view.response('Test response');
+        view.handleResponseChanged();
+        expect(view.submitEnabled()).toBe(false);
+    });
+
+    it("updates submit button when file has uploaded and response text changes", function() {
+        // Set file upload feature enabled
+        loadFixtures('oa_response_with_file_upload.html');
+        view.fileUploadAllowed = true;
+        // Set uploaded image url
+        view.imageUrl(FAKE_URL);
+
+        // Response is blank --> submit button disabled
+        view.response('');
+        view.handleResponseChanged();
+        expect(view.submitEnabled()).toBe(false);
+
+        // Response is not blank --> submit button enabled
+        view.response('Test response');
+        view.handleResponseChanged();
+        expect(view.submitEnabled()).toBe(true);
+    });
+
+    it("updates save button and save status when the user saves a response", function() {
+        // Response is blank --> save button is disabled
         view.response('');
         view.save();
         expect(view.submitEnabled()).toBe(false);
         expect(view.saveEnabled()).toBe(false);
         expect(view.saveStatus()).toContain('saved but not submitted');
 
-        // Response is not blank --> submit button enabled
+        // Response is not blank --> submit button remains disabled
         view.response('Test response');
         view.save();
-        expect(view.submitEnabled()).toBe(true);
+        expect(view.submitEnabled()).toBe(false);
         expect(view.saveEnabled()).toBe(false);
         expect(view.saveStatus()).toContain('saved but not submitted');
     });
@@ -403,7 +444,7 @@ describe("OpenAssessment.ResponseView", function() {
         spyOn(baseView, 'toggleActionError').andCallThrough();
         var files = [{type: 'image/jpg', size: 6000000, name: 'huge-picture.jpg', data: ''}];
         view.prepareUpload(files);
-        expect(baseView.toggleActionError).toHaveBeenCalledWith('upload', 'File size must be 5MB or less.');
+        expect(baseView.toggleActionError).toHaveBeenCalledWith('upload', 'File size must be 4MB or less.');
     });
 
     it("selects the wrong file type", function() {
@@ -413,37 +454,21 @@ describe("OpenAssessment.ResponseView", function() {
         expect(baseView.toggleActionError).toHaveBeenCalledWith('upload', 'File must be an image.');
     });
 
-    it("uploads a file using a one-time URL", function() {
+    it("uploads a file via ora2 server", function() {
+        spyOn(view, 'imageUrl').andCallThrough();
         var files = [{type: 'image/jpg', size: 1024, name: 'picture.jpg', data: ''}];
         view.prepareUpload(files);
-        view.fileUpload();
-        expect(fileUploader.uploadArgs.url).toEqual(FAKE_URL);
-        expect(fileUploader.uploadArgs.data).toEqual(files[0]);
-    });
-
-    it("displays an error if a one-time file upload URL cannot be retrieved", function() {
-        // Configure the server to fail when retrieving the one-time URL
-        server.uploadUrlError = true;
-        spyOn(baseView, 'toggleActionError').andCallThrough();
-
-        // Attempt to upload a file
-        var files = [{type: 'image/jpg', size: 1024, name: 'picture.jpg', data: ''}];
-        view.prepareUpload(files);
-        view.fileUpload();
-
-        // Expect an error to be displayed
-        expect(baseView.toggleActionError).toHaveBeenCalledWith('upload', 'ERROR');
+        expect(view.imageUrl).toHaveBeenCalledWith(FAKE_URL);
     });
 
     it("displays an error if a file could not be uploaded", function() {
         // Configure the file upload server to return an error
-        fileUploader.uploadError = true;
+        server.uploadError = true;
         spyOn(baseView, 'toggleActionError').andCallThrough();
 
         // Attempt to upload a file
         var files = [{type: 'image/jpg', size: 1024, name: 'picture.jpg', data: ''}];
         view.prepareUpload(files);
-        view.fileUpload();
 
         // Expect an error to be displayed
         expect(baseView.toggleActionError).toHaveBeenCalledWith('upload', 'ERROR');

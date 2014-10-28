@@ -94,6 +94,17 @@
         "output": "oa_response.html"
     },
     {
+        "template": "openassessmentblock/response/oa_response.html",
+        "context": {
+            "saved_response": "",
+            "save_status": "This response has not been saved.",
+            "submit_enabled": false,
+            "submission_due": "",
+            "allow_file_upload": true
+        },
+        "output": "oa_response_with_file_upload.html"
+    },
+    {
         "template": "openassessmentblock/student_training/student_training.html",
         "context": {
             "training_essay": "My special essay.",

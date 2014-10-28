@@ -86,6 +86,7 @@ describe("OpenAssessment.Server", function() {
     var TITLE = 'This is the title.';
     var SUBMISSION_START = '2012-10-09T00:00:00';
     var SUBMISSION_DUE = '2015-10-10T00:00:00';
+    var FAKE_URL = 'http://www.example.com';
 
     beforeEach(function() {
         // Create the server
@@ -452,5 +453,50 @@ describe("OpenAssessment.Server", function() {
             function(errMsg) { receivedMsg = errMsg; }
         );
         expect(receivedMsg).toEqual("Test error");
+    });
+
+    it("uploads an image file via ora2 server", function() {
+        stubAjax(true, { success: true, url: FAKE_URL });
+
+        var contentType = 'image/jpg';
+        var file = {};
+        var receivedUrl = null;
+        server.uploadFile(contentType, file).done(function(url) {
+            receivedUrl = url;
+        });
+
+        expect(receivedUrl).toBe(FAKE_URL);
+        var formData = new FormData();
+        formData.append('file', file);
+        expect($.ajax).toHaveBeenCalledWith({
+            url: '/upload_file',
+            type: "POST",
+            processData: false,
+            contentType: false,
+            data: formData
+        });
+    });
+
+    it("informs the caller of a server error when uploading an image file", function() {
+        stubAjax(true, { success: false, msg: "Test error" });
+
+        var receivedMsg = "";
+        server.uploadFile('image/jpg', {}).fail(function(msg) {
+            receivedMsg = msg;
+        });
+
+        expect(receivedMsg).toContain("Test error");
+    });
+
+    it("informs the caller of an AJAX error when uploading an image file", function() {
+        stubAjax(false, null);
+
+        var receivedMsg = null;
+        server.uploadFile('image/jpg', {}).fail(function(msg) {
+            receivedMsg = msg;
+        });
+
+        expect(receivedMsg).toContain("Could not upload file. Try again later.");
+
     });
 });
