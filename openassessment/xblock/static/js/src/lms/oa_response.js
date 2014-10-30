@@ -450,6 +450,13 @@ OpenAssessment.ResponseView.prototype = {
 
      **/
     prepareUpload: function(files) {
+        // Check for File API & HTML5 support
+        if (typeof files === 'undefined' || !(window.File && window.FileReader) || !window.FormData) {
+            this.baseView.toggleActionError(
+                'upload', gettext("Your browser does not support file upload feature.")
+            );
+            return false;
+        }
         this.files = null;
         this.imageType = files[0].type;
         if (files[0].size > this.MAX_FILE_SIZE) {

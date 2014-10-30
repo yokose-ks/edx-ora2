@@ -23,6 +23,10 @@ msgid "You're about to submit your response for this assignment. After you submi
 msgstr "あなたのレポートを提出します。 提出後はレポートを編集したり新たに提出することはできません。"
 
 #: openassessment/xblock/static/js/src/lms/oa_response.js
+msgid "Your browser does not support file upload feature."
+msgstr "このブラウザはファイルアップロード機能に対応しておりません。申し訳ありませんが、他のブラウザをお使いください。"
+
+#: openassessment/xblock/static/js/src/lms/oa_response.js
 msgid "File size must be 4MB or less."
 msgstr "ファイルサイズは4MB以下である必要があります。"
 
