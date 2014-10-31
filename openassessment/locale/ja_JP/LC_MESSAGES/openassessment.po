@@ -13,8 +13,8 @@ msgstr ""
 "Project-Id-Version: edx-platform\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2014-09-11 17:02-0400\n"
-"PO-Revision-Date: 2014-10-08 09:25+0000\n"
-"Last-Translator: watcafe\n"
+"PO-Revision-Date: 2014-10-24 03:00+0000\n"
+"Last-Translator: ayokose <ayokose.gacco@gmail.com>\n"
 "Language-Team: Japanese (Japan) (http://www.transifex.com/projects/p/edx-platform/language/ja_JP/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -507,7 +507,7 @@ msgstr "あなたが提出した画像"
 #: openassessment/templates/openassessmentblock/response/oa_response_submitted.html:53
 #: openassessment/templates/openassessmentblock/self/oa_self_assessment.html:58
 msgid "The image associated with your submission."
-msgstr "この画像はあなたの課題にヒモ付けられています。"
+msgstr "課題としての提出画像（表示されない場合、エラーの可能性あり）"
 
 #: openassessment/templates/openassessmentblock/grade/oa_grade_complete.html:47
 msgid "Assessments of Your Response"
@@ -1080,7 +1080,7 @@ msgstr "提出するまではレポートを編集することができます。
 
 #: openassessment/templates/openassessmentblock/response/oa_response.html:68
 msgid "We could not upload this image"
-msgstr "この画像のアップロードに失敗しました。"
+msgstr "画像のアップロードに失敗しました。"
 
 #: openassessment/templates/openassessmentblock/response/oa_response.html:72
 msgid "Select an image to upload for this submission."

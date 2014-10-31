@@ -523,7 +523,7 @@ msgstr "あなたが提出した画像"
 #: openassessment/templates/openassessmentblock/response/oa_response_submitted.html
 #: openassessment/templates/openassessmentblock/self/oa_self_assessment.html
 msgid "The image associated with your submission."
-msgstr "この画像はあなたの課題にヒモ付けられています。"
+msgstr "課題としての提出画像（表示されない場合、エラーの可能性あり）"
 
 #: openassessment/templates/openassessmentblock/grade/oa_grade_complete.html
 msgid "Assessments of Your Response"
@@ -1109,7 +1109,7 @@ msgstr "提出するまではレポートを編集することができます。
 
 #: openassessment/templates/openassessmentblock/response/oa_response.html
 msgid "We could not upload this image"
-msgstr "この画像のアップロードに失敗しました。"
+msgstr "画像のアップロードに失敗しました。"
 
 #: openassessment/templates/openassessmentblock/response/oa_response.html
 msgid "Select an image to upload for this submission."
@@ -1763,3 +1763,7 @@ msgstr "受講生用トレーニング、そして凡例準拠採点課題では
 #: openassessment/xblock/validation.py
 msgid "Leaderboard number is invalid."
 msgstr "上位成績者表示数が不正です。"
+
+#: openassessment/xblock/submission_mixin.py
+msgid "Error uploading file."
+msgstr "ファイルアップロードに失敗しました。"
