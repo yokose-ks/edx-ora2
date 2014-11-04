@@ -42,6 +42,7 @@ module.exports = function(config) {
 
     // list of files to exclude
     exclude: [
+      'spec/lms/oa_grade.js',  // due to EDX-521: Disable Feedback on Peer Assessments
       'src/design*.js'
     ],
 
