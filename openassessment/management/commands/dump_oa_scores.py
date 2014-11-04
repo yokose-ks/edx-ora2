@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from datetime import datetime
 import json
 import logging
 from itertools import izip_longest
@@ -6,6 +7,7 @@ from unicodedata import east_asian_width
 import unicodecsv as csv
 
 from django.core.management.base import BaseCommand, CommandError
+from django.utils.timezone import UTC
 
 from xmodule.modulestore import Location
 from xmodule.modulestore.django import modulestore
@@ -55,7 +57,7 @@ class Command(BaseCommand):
         oa_items = modulestore().get_items(Location(tag, org, course, 'openassessment'))
         if not oa_items:
             raise CommandError("No openassessment item was found.")
-        oa_items = sorted(oa_items, key=lambda item:item.start)
+        oa_items = sorted(oa_items, key=lambda item:item.start or datetime(2030, 1, 1, tzinfo=UTC()))
         print "Openassessment item(s):"
         oa_output = SimpleTable()
         oa_output.set_header(['#', 'Item ID', 'Title'])
