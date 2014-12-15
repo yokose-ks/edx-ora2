@@ -8,8 +8,9 @@ import unicodecsv as csv
 from django.core.management.base import BaseCommand, CommandError
 from django.utils.timezone import UTC
 
-from xmodule.modulestore import Location
 from xmodule.modulestore.django import modulestore
+from opaque_keys import InvalidKeyError
+from opaque_keys.edx.locator import CourseLocator
 
 from openassessment.assessment.models import PeerWorkflow, PeerWorkflowItem
 from openassessment.workflow import api as workflow_api
@@ -27,7 +28,8 @@ class Command(BaseCommand):
     Usage: python manage.py cms --settings=aws dump_oa_scores edX/DemoX/Demo_Course
 
     Args:
-        course_id (unicode): The ID of the course to the openassessment item exists in, like 'org/course/run'
+        course_id (unicode): The ID of the course to the openassessment item exists in,
+                             like 'org/course/run' or 'course-v1:org+course+run'
     """
     help = """Usage: dump_oa_scores <course_id>"""
 
@@ -38,22 +40,17 @@ class Command(BaseCommand):
         course_id, = args
         # Check args: course_id
         try:
-            Location.parse_course_id(course_id)
-        except ValueError:
-            raise CommandError("The course_id is not of the right format. It should be like 'org/course/run'")
+            course_id = CourseLocator.from_string(course_id)
+        except InvalidKeyError:
+            raise CommandError("The course_id is not of the right format. It should be like 'org/course/run' or 'course-v1:org+course+run'")
 
         # Find course
-        course_dict = Location.parse_course_id(course_id)
-        tag = 'i4x'
-        org = course_dict['org']
-        course = course_dict['course']
-        name = course_dict['name']
-        course_items = modulestore().get_items(Location(tag, org, course, 'course', name))
+        course_items = modulestore().get_items(course_id, qualifiers={'category': 'course'})
         if not course_items:
             raise CommandError("No such course was found.")
 
         # Find openassessment items
-        oa_items = modulestore().get_items(Location(tag, org, course, 'openassessment'))
+        oa_items = modulestore().get_items(course_id, qualifiers={'category': 'openassessment'})
         if not oa_items:
             raise CommandError("No openassessment item was found.")
         oa_items = sorted(oa_items, key=lambda item:item.start or datetime(2030, 1, 1, tzinfo=UTC()))
@@ -63,7 +60,7 @@ class Command(BaseCommand):
         for i, oa_item in enumerate(oa_items):
             row = []
             row.append(i)
-            row.append(oa_item.id)
+            row.append(oa_item.location)
             row.append(oa_item.title)
             oa_output.add_row(row)
         print oa_output
@@ -80,10 +77,10 @@ class Command(BaseCommand):
                 print "WARN: Invalid number was detected. Choose again."
                 continue
 
-        item_id = oa_item.id
+        item_location = oa_item.location
 
-        # Get submissions from course_id and item_id
-        submissions = get_submissions(course_id, item_id)
+        # Get submissions from course_id and item_location
+        submissions = get_submissions(course_id, item_location)
 
         header = ['Title', 'User name', 'Submission content', 'Submission created at', 'Status', 'Points earned', 'Points possible', 'Score created at', 'Grade count', 'Being graded count', 'Scored count']
         header_extra = []
@@ -146,7 +143,7 @@ class Command(BaseCommand):
             rows.append(row)
 
         header.extend(sorted(set(header_extra), key=header_extra.index))
-        write_csv('oa_scores-%s-#%d.csv' % (course_id.replace('/', '.'), selected_oa_item), header, rows)
+        write_csv('oa_scores-%s-#%d.csv' % (course_id.to_deprecated_string().replace('/', '.'), selected_oa_item), header, rows)
 
 
 def write_csv(output_filename, header, rows):
@@ -160,8 +157,8 @@ def write_csv(output_filename, header, rows):
         raise CommandError("Error writing to file: %s" % output_filename)
 
 
-def get_submissions(course_id, item_id):
-    submissions = PeerWorkflow.objects.filter(course_id=course_id, item_id=item_id)
+def get_submissions(course_id, item_location):
+    submissions = PeerWorkflow.objects.filter(course_id=course_id, item_id=item_location)
     if not submissions:
         raise CommandError("No submission was found.")
     return submissions
