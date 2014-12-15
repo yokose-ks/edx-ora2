@@ -7,8 +7,9 @@ from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand, CommandError
 from django.utils.timezone import now, UTC
 
-from xmodule.modulestore import Location
 from xmodule.modulestore.django import modulestore
+from opaque_keys import InvalidKeyError
+from opaque_keys.edx.locator import CourseLocator
 
 from openassessment.assessment.api import peer as peer_api
 from openassessment.assessment.models import Assessment, PeerWorkflow, PeerWorkflowItem
@@ -29,7 +30,8 @@ class Command(BaseCommand):
     Usage: python manage.py cms --settings=aws rescore_oa edX/DemoX/Demo_Course
 
     Args:
-        course_id (unicode): The ID of the course to the openassessment item exists in, like 'org/course/run'
+        course_id (unicode): The ID of the course to the openassessment item exists in,
+                             like 'org/course/run' or 'course-v1:org+course+run'
         username (unicode): The author's username of the submission to be treated
     """
     help = """Usage: rescore_oa <course_id> <username>"""
@@ -41,22 +43,17 @@ class Command(BaseCommand):
         course_id, username, = args
         # Check args: course_id
         try:
-            Location.parse_course_id(course_id)
-        except ValueError:
-            raise CommandError("The course_id is not of the right format. It should be like 'org/course/run'")
+            course_id = CourseLocator.from_string(course_id)
+        except InvalidKeyError:
+            raise CommandError("The course_id is not of the right format. It should be like 'org/course/run' or 'course-v1:org+course+run'")
 
         # Find course
-        course_dict = Location.parse_course_id(course_id)
-        tag = 'i4x'
-        org = course_dict['org']
-        course = course_dict['course']
-        name = course_dict['name']
-        course_items = modulestore().get_items(Location(tag, org, course, 'course', name))
+        course_items = modulestore().get_items(course_id, qualifiers={'category': 'course'})
         if not course_items:
             raise CommandError("No such course was found.")
 
         # Find openassessment items
-        oa_items = modulestore().get_items(Location(tag, org, course, 'openassessment'))
+        oa_items = modulestore().get_items(course_id, qualifiers={'category': 'openassessment'})
         if not oa_items:
             raise CommandError("No openassessment item was found.")
         oa_items = sorted(oa_items, key=lambda item:item.start or datetime(2030, 1, 1, tzinfo=UTC()))
@@ -66,7 +63,7 @@ class Command(BaseCommand):
         for i, oa_item in enumerate(oa_items):
             row = []
             row.append(i)
-            row.append(oa_item.id)
+            row.append(oa_item.location)
             row.append(oa_item.title)
             oa_output.add_row(row)
         print oa_output
@@ -83,7 +80,7 @@ class Command(BaseCommand):
                 print "WARN: Invalid number was detected. Choose again."
                 continue
 
-        item_id = oa_item.id
+        item_location = oa_item.location
 
         # Get student_id from username
         # TODO: courseenrollment parameters can be used by only lms?
@@ -93,8 +90,8 @@ class Command(BaseCommand):
         student = students[0]
         anonymous_student_id = anonymous_id_for_user(student, course_id)
 
-        # Get submission from student_id, course_id and item_id
-        submission = get_submission(course_id, item_id, anonymous_student_id)
+        # Get submission from student_id, course_id and item_location
+        submission = get_submission(course_id, item_location, anonymous_student_id)
 
         # Print summary
         print_summary(course_id, oa_item, anonymous_student_id)
@@ -154,7 +151,7 @@ class Command(BaseCommand):
                         continue
                     staff = staffs[0]
                     anonymous_staff_id = anonymous_id_for_user(staff, course_id)
-                    staff_submissions = PeerWorkflow.objects.filter(course_id=course_id, item_id=item_id, student_id=anonymous_staff_id)
+                    staff_submissions = PeerWorkflow.objects.filter(course_id=course_id, item_id=item_location, student_id=anonymous_staff_id)
                     if not staff_submissions:
                         print "WARN: This user hasn't posted any submission in this openassessment item yet. Input again."
                         continue
@@ -204,8 +201,8 @@ class Command(BaseCommand):
                 continue
 
 
-def get_submission(course_id, item_id, anonymous_student_id):
-    submissions = PeerWorkflow.objects.filter(course_id=course_id, item_id=item_id, student_id=anonymous_student_id)
+def get_submission(course_id, item_location, anonymous_student_id):
+    submissions = PeerWorkflow.objects.filter(course_id=course_id, item_id=item_location, student_id=anonymous_student_id)
     if not submissions:
         raise CommandError("No submission was found.")
     if len(submissions) > 1:
@@ -300,7 +297,7 @@ def scores_by_criterion(assessments):
 
 def print_summary(course_id, oa_item, anonymous_student_id):
     # Print submission
-    submission = get_submission(course_id, oa_item.id, anonymous_student_id)
+    submission = get_submission(course_id, oa_item.location, anonymous_student_id)
     print "Submission status:"
     print_submission(submission, oa_item)
 
