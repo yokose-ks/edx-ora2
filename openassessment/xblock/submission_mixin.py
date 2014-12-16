@@ -1,4 +1,8 @@
+import json
 import logging
+from webob import Response
+
+import magic
 
 from xblock.core import XBlock
 
@@ -175,6 +179,34 @@ class SubmissionMixin(object):
 
         return submission
 
+    @XBlock.handler
+    def upload_file(self, data, suffix=''):
+        """
+        Uploade an image file for this submission.
+
+        Returns:
+            A JSON-formatted response.
+
+        """
+        try:
+            file = data.POST.get('file').file
+            content_type = magic.from_buffer(file.read(), mime=True)
+            file.seek(0)
+        except Exception:
+            logger.exception("Error specifying contentType.")
+            return json_response({'success': False, 'msg': self._(u"Must specify contentType.")})
+
+        if not content_type.startswith('image/'):
+            return json_response({'success': False, 'msg': self._(u"contentType must be an image.")})
+
+        try:
+            key = self._get_student_item_key()
+            url = file_upload_api.upload_file(key, file)
+            return json_response({'success': True, 'url': url})
+        except FileUploadError:
+            logger.exception("Error uploading file.")
+            return json_response({'success': False, 'msg': self._(u"Error uploading file.")})
+
     @XBlock.json_handler
     def upload_url(self, data, suffix=''):
         """
@@ -342,7 +374,8 @@ class SubmissionMixin(object):
         context['has_self'] = 'self-assessment' in self.assessment_steps
 
         if self.allow_file_upload:
-            context['file_url'] = self._get_download_url()
+            file_url = self._get_download_url()
+            context['file_url'] = file_url
 
         if not workflow and problem_closed:
             if reason == 'due':
@@ -353,7 +386,8 @@ class SubmissionMixin(object):
         elif not workflow:
             context['saved_response'] = self.saved_response
             context['save_status'] = self.save_status
-            context['submit_enabled'] = self.saved_response != ''
+            # Note: Disable submit button before attachment file is uploaded
+            context['submit_enabled'] = self.saved_response != '' and (not self.allow_file_upload or file_url != '')
             path = "openassessmentblock/response/oa_response.html"
         elif workflow["status"] == "done":
             student_submission = self.get_user_submission(
@@ -368,3 +402,11 @@ class SubmissionMixin(object):
             path = 'openassessmentblock/response/oa_response_submitted.html'
 
         return path, context
+
+
+def json_response(data):
+    """
+    Return a Response with the data json-serialized and the right content
+    type header.
+    """
+    return Response(json.dumps(data), content_type="application/json")
