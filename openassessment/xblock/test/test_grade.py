@@ -15,6 +15,10 @@ from openassessment.xblock.openassessmentblock import OpenAssessmentBlock
 from .base import XBlockHandlerTestCase, scenario
 
 
+def mock_choice(seq):
+    return seq[0]
+
+
 @ddt.ddt
 class TestGrade(XBlockHandlerTestCase):
     """
@@ -363,6 +367,7 @@ class TestGrade(XBlockHandlerTestCase):
                 expected_option_label = option_labels[(part['criterion']['name'], part['option']['name'])]
                 self.assertEqual(part['option']['label'], expected_option_label)
 
+    @mock.patch('random.choice', mock.Mock(side_effect=mock_choice))
     def _create_submission_and_assessments(
         self, xblock, submission_text, peers, peer_assessments, self_assessment,
         waiting_for_peer=False,

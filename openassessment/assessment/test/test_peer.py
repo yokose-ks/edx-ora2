@@ -6,7 +6,7 @@ import copy
 from django.db import DatabaseError, IntegrityError
 from django.utils import timezone
 from ddt import ddt, file_data
-from mock import patch
+from mock import Mock, patch
 from nose.tools import raises
 
 from openassessment.test_utils import CacheResetTest
@@ -152,6 +152,16 @@ class TestPeerApi(CacheResetTest):
     """
 
     CREATE_ASSESSMENT_NUM_QUERIES = 58
+
+    def setUp(self):
+        super(TestPeerApi, self).setUp()
+
+        def mock_choice(seq):
+            return seq[0]
+
+        patcher = patch('random.choice', Mock(side_effect=mock_choice))
+        self.mock_choice = patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_create_assessment_points(self):
         self._create_student_and_submission("Tim", "Tim's answer")
