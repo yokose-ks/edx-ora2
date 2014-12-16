@@ -40,9 +40,12 @@
                     <article class="peer-assessment" id="peer-assessment--001">
                         <div class="peer-assessment__display">
                             <header class="peer-assessment__display__header">
-                                <h3 class="peer-assessment__display__title">{% trans "Assessment #" %}
-                                    <span class="peer-assessment__number--current">{{ review_num }}</span> of
-                                    <span class="peer-assessment__number--required">{{ must_grade }}</span>
+                                <h3 class="peer-assessment__display__title">
+                                        {% with review_num_string=review_num|stringformat:"s" must_grade_string=must_grade|stringformat:"s" %}
+                                        {% blocktrans with review_number='<span class="peer-assessment__number--current">'|safe|add:review_num_string|add:'</span>'|safe num_must_grade='<span class="peer-assessment__number--required">'|safe|add:must_grade_string|add:'</span>'|safe %}
+                                            Assessment # {{ review_number }} of {{ num_must_grade }}
+                                        {% endblocktrans %}
+                                        {% endwith %}
                                 </h3>
                             </header>
 
