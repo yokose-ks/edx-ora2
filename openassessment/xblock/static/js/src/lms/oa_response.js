@@ -46,7 +46,8 @@ OpenAssessment.ResponseView.prototype = {
                 // Load the HTML and install event handlers
                 $('#openassessment__response', view.element).replaceWith(html);
                 view.installHandlers();
-                view.setAutoSaveEnabled(true);
+                // Note(yokose): Disable autoSave to avoid overwriting state
+                //view.setAutoSaveEnabled(true);
                 // Set flag to determine whether image attachments are allowed
                 if ($('#submission__answer__image', view.element).size() != 0) {
                     view.fileUploadAllowed = true;
